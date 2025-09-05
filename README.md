@@ -1,303 +1,54 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<title>Consignes interactives</title>
-<style>
-body { display: flex; font-family: Arial, sans-serif; }
-#main { flex: 3; padding: 20px; }
-#archives { flex: 1; background: #f4f4f4; padding: 20px; border-left: 2px solid #ccc; }
-.consigne { margin: 8px 0; padding: 6px; border-radius: 6px; display:flex; align-items:center; justify-content: flex-start; }
-.fait { background: #c8f7c5; }         /* vert */
-.prioritaire { background: #f8c5c5; }  /* rouge */
-.modifiee { background: #fff3b0; }     /* jaune */
-.badge { background: #ff9800; color: white; padding: 2px 5px; border-radius: 4px; font-size: 12px; margin-left:10px; }
-#add-form { margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
-#add-form input[type="text"] { width: 250px; }
-.btn { margin-left: 5px; cursor: pointer; }
-#role-switch { margin-bottom: 15px; padding: 10px; background: #ddd; border-radius: 6px; display:flex; align-items:center; }
-.error { color: red; font-weight: bold; margin-left: 10px; }
-#notification { margin-bottom: 15px; font-weight: bold; color: #ff5722; }
+# Diagramme de l'application
+mon-appli/
+├── index.html       # Prototype HTML/CSS/JS
+├── README.md        # Documentation et diagramme
+└── docs/            # Dossier optionnel pour images ou diagrammes
+    └── diagramme.png
 
-/* Archives améliorées */
-.archive-date {
-  border-top: 2px solid #999;
-  padding-top: 10px;
-  margin-top: 10px;
-  font-weight: bold;
-  background: #e0e0e0;
-  border-radius: 5px;
-  padding-left: 5px;
-}
-.archive-consigne {
-  margin-left: 15px;
-  padding: 2px 5px;
-  border-radius: 4px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.archive-consigne span { flex: 1; }
-.archive-consigne button { margin-left: 5px; cursor: pointer; }
-</style>
-</head>
-<body>
+# 📌 Application de Consignes Interactives
 
-<div id="main">
+Cette application permet aux **chefs** de diffuser des consignes aux **intervenants**, avec gestion des priorités, notifications, surlignage des modifications, et un historique automatique après chaque journée.
 
-  <!-- Choix du rôle -->
-  <div id="role-switch">
-    <span>Rôle actuel : <span id="role-label">Intervenant</span></span>
-    <button id="toggle-role" style="margin-left:10px;">Passer en mode Chef</button>
-    <span id="error-msg" class="error"></span>
-  </div>
+---
 
-  <!-- Notification modifications -->
-  <div id="notification" style="display:none;"></div>
+## 👥 Rôles des utilisateurs
 
-  <h2 id="titre-consignes">📌 Consignes</h2>
+- **Chefs** :
+  - Créent et modifient les consignes
+  - Marquent certaines consignes comme **prioritaires**
+  - Modifient l’encadré des **informations importantes**
+  - Consultent l’historique
 
-  <!-- Formulaire pour ajouter une consigne (chef uniquement) -->
-  <div id="add-form" style="display:none;">
-    <input type="text" id="new-consigne" placeholder="Nouvelle consigne">
-    <label>
-      <input type="checkbox" id="new-prioritaire"> Prioritaire
-    </label>
-    <button id="add-btn">Ajouter</button>
-  </div>
+- **Intervenants** :
+  - Lisent les consignes du jour
+  - Peuvent cocher « ✅ fait » sur une consigne
+  - Peuvent ajouter un commentaire si la consigne n’est pas réalisée
+  - Ont accès à l’historique en **lecture seule**
 
-  <div id="consignes-du-jour"></div>
-</div>
+---
 
-<div id="archives">
-<h3>📚 Archives</h3>
-<div id="liste-archives"></div>
-</div>
+## ⚙️ Fonctionnalités principales
 
-<script>
-// ------------------- Variables -------------------
-const jours = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
-const consignesParJour = {
-  'lundi': [ {text: 'Vérifier extincteurs', prioritaire: true} ],
-  'mardi': [ {text: 'Contrôler stock matériel', prioritaire: false} ],
-  'mercredi': [ {text: 'Inspection machines', prioritaire: false} ],
-  'jeudi': [ {text: 'Mise à jour registre', prioritaire: true} ],
-  'vendredi': [ {text: 'Réunion sécurité', prioritaire: true} ],
-  'samedi': [ {text: 'Consignes weekend', prioritaire: false} ],
-  'dimanche': [ {text: 'Consignes weekend', prioritaire: false} ]
-};
+- 📢 **Diffusion avec notification** dès qu’une consigne est créée ou modifiée  
+- 🔴 **Consignes prioritaires** affichées en rouge  
+- 🟨 **Surlignage des modifications** (même une lettre changée)  
+- ✅ **Checklist** pour marquer une consigne comme faite  
+- 💬 **Commentaires** si non fait    
+- 📚 **Archivage automatique** : les consignes passées sont déplacées dans un bandeau « Historique », **en lecture seule** pour garder une trace
 
-let consignesStockees = JSON.parse(localStorage.getItem('consignes')) || {};
-let role = "intervenant"; 
-const chefPassword = "admin123"; 
+---
 
-function getTodayDate() {
-  const now = new Date();
-  return now.toISOString().split('T')[0];
-}
-const todayDate = getTodayDate();
-const dayName = jours[new Date(todayDate).getDay()];
+## 📊 Diagramme général
 
-// ------------------- Initialisation -------------------
-if(!consignesStockees[todayDate]){
-  consignesStockees[todayDate] = consignesParJour[dayName] || [];
-  localStorage.setItem('consignes', JSON.stringify(consignesStockees));
-}
+```mermaid
+flowchart TD
+  subgraph Utilisateurs
+    Chef
+    Intervenant
+  end
 
-// ------------------- Titre automatique -------------------
-document.getElementById('titre-consignes').textContent = "📌 Consignes du " + new Date(todayDate).toLocaleDateString('fr-FR');
+  Chef -->|Crée/Modifie| Base[(Base de données)]
+  Intervenant -->|Lit/Exécute| Base
 
-// ------------------- Affichage consignes -------------------
-function afficherConsignes() {
-  const container = document.getElementById('consignes-du-jour');
-  container.innerHTML = "";
-  let modifCount = 0;
-
-  consignesStockees[todayDate].forEach((c,index)=>{
-    const div = document.createElement('div');
-    div.className="consigne";
-
-    // Couleurs
-    if(c.done) div.classList.add("fait");
-    else if(c.prioritaire) div.classList.add("prioritaire");
-    else if(c.modifiee) { div.classList.add("modifiee"); modifCount++; }
-
-    // Checkbox à gauche
-    const check = document.createElement('input');
-    check.type="checkbox"; check.checked = c.done || false; check.style.marginRight="10px";
-    check.onchange = () => {
-      if(check.checked){
-        c.done = true; c.modifiee=false; archiverConsigne(c);
-        consignesStockees[todayDate].splice(index,1);
-      } else { c.done=false; }
-      sauvegarder();
-    };
-    div.appendChild(check);
-
-    // Texte consigne
-    const textSpan = document.createElement('span');
-    textSpan.textContent=c.text;
-    div.appendChild(textSpan);
-
-    // Badge modifiée
-    if(c.modifiee && !c.done){
-      const badge = document.createElement('span');
-      badge.className="badge"; badge.textContent="🔔 Modifiée";
-      div.appendChild(badge);
-    }
-
-    // Commentaire
-    const comment = document.createElement('input');
-    comment.type="text"; comment.placeholder="Commentaire si non fait"; comment.value=c.commentaire||"";
-    comment.style.marginLeft="10px";
-    comment.onchange = ()=> { c.commentaire=comment.value; sauvegarder(); }
-    div.appendChild(comment);
-
-    // Boutons chef
-    if(role==="chef"){
-      const editBtn = document.createElement('button');
-      editBtn.textContent="✏️ Modifier"; editBtn.className="btn";
-      editBtn.onclick=()=>modifierConsigne(index);
-      div.appendChild(editBtn);
-
-      const toggleBtn = document.createElement('button');
-      toggleBtn.textContent = c.prioritaire ? "⚪ Retirer priorité" : "🔴 Mettre prioritaire";
-      toggleBtn.className="btn";
-      toggleBtn.onclick=()=>{
-        c.prioritaire=!c.prioritaire; c.modifiee=true; sauvegarder();
-      };
-      div.appendChild(toggleBtn);
-
-      const delBtn = document.createElement('button');
-      delBtn.textContent="🗑️ Supprimer"; delBtn.className="btn";
-      delBtn.onclick=()=>{
-        if(confirm("Supprimer cette consigne ?")){
-          consignesStockees[todayDate].splice(index,1); sauvegarder();
-        }
-      };
-      div.appendChild(delBtn);
-    }
-
-    container.appendChild(div);
-  });
-
-  // Notification
-  const notif = document.getElementById('notification');
-  if(modifCount>0){ notif.style.display="block"; notif.textContent=`🔔 ${modifCount} consigne(s) modifiée(s) aujourd'hui !`; }
-  else notif.style.display="none";
-}
-
-// ------------------- Archiver consigne -------------------
-function archiverConsigne(consigne){
-  if(!consignesStockees['archives']) consignesStockees['archives']={};
-  if(!consignesStockees['archives'][todayDate]) consignesStockees['archives'][todayDate]=[];
-  consignesStockees['archives'][todayDate].push({...consigne});
-}
-
-// ------------------- Affichage archives -------------------
-function afficherArchives(){
-  const listeArchives=document.getElementById('liste-archives');
-  listeArchives.innerHTML="";
-  if(!consignesStockees['archives']) return;
-
-  Object.keys(consignesStockees['archives']).sort().forEach(date=>{
-    const dateDiv=document.createElement('div');
-    dateDiv.className = "archive-date";
-    dateDiv.textContent="📅 "+new Date(date).toLocaleDateString('fr-FR');
-    listeArchives.appendChild(dateDiv);
-
-    consignesStockees['archives'][date].forEach((c,index)=>{
-      const cDiv=document.createElement('div');
-      cDiv.className = "archive-consigne";
-
-      const textSpan=document.createElement('span');
-      textSpan.textContent="🔹 "+c.text + (c.commentaire ? " 💬 "+c.commentaire : "") + " ✅";
-      cDiv.appendChild(textSpan);
-
-      // Bouton supprimer si chef (retour automatique dans consignes)
-      if(role==="chef"){
-        const delBtn=document.createElement('button');
-        delBtn.textContent="🗑️ Supprimer";
-        delBtn.onclick=()=>{
-          // Supprimer de l'archive
-          const consigneSupprimee = consignesStockees['archives'][date].splice(index,1)[0];
-
-          // Revenir dans les consignes du jour
-          if(!consignesStockees[todayDate]) consignesStockees[todayDate]=[];
-          consignesStockees[todayDate].push({
-            text: consigneSupprimee.text,
-            prioritaire: consigneSupprimee.prioritaire,
-            modifiee: true
-          });
-
-          // Supprimer la date d'archive si vide
-          if(consignesStockees['archives'][date].length===0){
-            delete consignesStockees['archives'][date];
-          }
-
-          sauvegarder();
-        };
-        cDiv.appendChild(delBtn);
-      }
-
-      listeArchives.appendChild(cDiv);
-    });
-  });
-}
-
-// ------------------- Ajouter consigne -------------------
-document.getElementById('add-btn').onclick = () => {
-  const text=document.getElementById('new-consigne').value.trim();
-  const prioritaire=document.getElementById('new-prioritaire').checked;
-  if(text!==""){
-    consignesStockees[todayDate].push({text, prioritaire});
-    sauvegarder();
-    document.getElementById('new-consigne').value="";
-    document.getElementById('new-prioritaire').checked=false;
-  }
-};
-
-// ------------------- Modifier consigne -------------------
-function modifierConsigne(index){
-  const nouvelleConsigne=prompt("Modifier la consigne :", consignesStockees[todayDate][index].text);
-  if(nouvelleConsigne!==null){
-    consignesStockees[todayDate][index].text=nouvelleConsigne;
-    consignesStockees[todayDate][index].modifiee=true;
-    sauvegarder();
-  }
-}
-
-// ------------------- Sauvegarde -------------------
-function sauvegarder(){
-  localStorage.setItem('consignes', JSON.stringify(consignesStockees));
-  afficherConsignes();
-  afficherArchives();
-}
-
-// ------------------- Gestion des rôles -------------------
-document.getElementById('toggle-role').onclick = ()=>{
-  const errorMsg=document.getElementById('error-msg'); errorMsg.textContent="";
-  if(role==="intervenant"){
-    const pwd=prompt("Mot de passe Chef :");
-    if(pwd===chefPassword){
-      role="chef";
-      document.getElementById('role-label').textContent="Chef";
-      document.getElementById('toggle-role').textContent="Passer en mode Intervenant";
-      document.getElementById('add-form').style.display="block";
-    } else { errorMsg.textContent="❌ Mot de passe incorrect"; }
-  } else {
-    role="intervenant";
-    document.getElementById('role-label').textContent="Intervenant";
-    document.getElementById('toggle-role').textContent="Passer en mode Chef";
-    document.getElementById('add-form').style.display="none";
-  }
-  afficherConsignes();
-  afficherArchives();
-};
-
-// ------------------- Initialisation -------------------
-afficherConsignes();
-afficherArchives();
-</script>
-</body>
-</html>
+  Base -->|🔔 Notifications temps réel| Intervenant
+  Base -->|🔔 Notifications temps réel| Ch
