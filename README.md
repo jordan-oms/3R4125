@@ -1,177 +1,303 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <title>Consignes du jour</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    h1 { color: #333; }
-    .consigne { margin: 8px 0; padding: 8px; border: 1px solid #ccc; border-radius: 5px; }
-    .consigne.prioritaire { background-color: #ffcccc; } /* Rouge */
-    .consigne.fait { background-color: #ccffcc; } /* Vert */
-    .consigne.modifie { background-color: #ffffcc; } /* Jaune */
-    .archives { margin-top: 30px; border-top: 2px solid #333; padding-top: 15px; }
-    .date-archive { font-weight: bold; margin-top: 15px; }
-    button { margin: 5px; padding: 5px 10px; }
-  </style>
+<meta charset="UTF-8">
+<title>Consignes interactives</title>
+<style>
+body { display: flex; font-family: Arial, sans-serif; }
+#main { flex: 3; padding: 20px; }
+#archives { flex: 1; background: #f4f4f4; padding: 20px; border-left: 2px solid #ccc; }
+.consigne { margin: 8px 0; padding: 6px; border-radius: 6px; display:flex; align-items:center; justify-content: flex-start; }
+.fait { background: #c8f7c5; }         /* vert */
+.prioritaire { background: #f8c5c5; }  /* rouge */
+.modifiee { background: #fff3b0; }     /* jaune */
+.badge { background: #ff9800; color: white; padding: 2px 5px; border-radius: 4px; font-size: 12px; margin-left:10px; }
+#add-form { margin-bottom: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+#add-form input[type="text"] { width: 250px; }
+.btn { margin-left: 5px; cursor: pointer; }
+#role-switch { margin-bottom: 15px; padding: 10px; background: #ddd; border-radius: 6px; display:flex; align-items:center; }
+.error { color: red; font-weight: bold; margin-left: 10px; }
+#notification { margin-bottom: 15px; font-weight: bold; color: #ff5722; }
+
+/* Archives améliorées */
+.archive-date {
+  border-top: 2px solid #999;
+  padding-top: 10px;
+  margin-top: 10px;
+  font-weight: bold;
+  background: #e0e0e0;
+  border-radius: 5px;
+  padding-left: 5px;
+}
+.archive-consigne {
+  margin-left: 15px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.archive-consigne span { flex: 1; }
+.archive-consigne button { margin-left: 5px; cursor: pointer; }
+</style>
 </head>
 <body>
-  <h1 id="titre-consignes"></h1>
 
-  <div id="consignes"></div>
+<div id="main">
 
-  <div>
-    <button onclick="ajouterConsigne()">➕ Ajouter une consigne</button>
-    <button onclick="toggleChef()">👨‍💼 Mode Chef</button>
+  <!-- Choix du rôle -->
+  <div id="role-switch">
+    <span>Rôle actuel : <span id="role-label">Intervenant</span></span>
+    <button id="toggle-role" style="margin-left:10px;">Passer en mode Chef</button>
+    <span id="error-msg" class="error"></span>
   </div>
 
-  <div class="archives">
-    <h2>Archives</h2>
-    <div id="archives"></div>
+  <!-- Notification modifications -->
+  <div id="notification" style="display:none;"></div>
+
+  <h2 id="titre-consignes">📌 Consignes</h2>
+
+  <!-- Formulaire pour ajouter une consigne (chef uniquement) -->
+  <div id="add-form" style="display:none;">
+    <input type="text" id="new-consigne" placeholder="Nouvelle consigne">
+    <label>
+      <input type="checkbox" id="new-prioritaire"> Prioritaire
+    </label>
+    <button id="add-btn">Ajouter</button>
   </div>
 
-  <script>
-    let consignes = JSON.parse(localStorage.getItem("consignes")) || [];
-    let archives = JSON.parse(localStorage.getItem("archives")) || {};
-    let chefMode = false;
+  <div id="consignes-du-jour"></div>
+</div>
 
-    // Titre avec la date automatique
-    function majTitre() {
-      const date = new Date();
-      const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
-      document.getElementById("titre-consignes").innerText = 
-        "Consignes du " + date.toLocaleDateString("fr-FR", options);
+<div id="archives">
+<h3>📚 Archives</h3>
+<div id="liste-archives"></div>
+</div>
+
+<script>
+// ------------------- Variables -------------------
+const jours = ['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+const consignesParJour = {
+  'lundi': [ {text: 'Vérifier extincteurs', prioritaire: true} ],
+  'mardi': [ {text: 'Contrôler stock matériel', prioritaire: false} ],
+  'mercredi': [ {text: 'Inspection machines', prioritaire: false} ],
+  'jeudi': [ {text: 'Mise à jour registre', prioritaire: true} ],
+  'vendredi': [ {text: 'Réunion sécurité', prioritaire: true} ],
+  'samedi': [ {text: 'Consignes weekend', prioritaire: false} ],
+  'dimanche': [ {text: 'Consignes weekend', prioritaire: false} ]
+};
+
+let consignesStockees = JSON.parse(localStorage.getItem('consignes')) || {};
+let role = "intervenant"; 
+const chefPassword = "admin123"; 
+
+function getTodayDate() {
+  const now = new Date();
+  return now.toISOString().split('T')[0];
+}
+const todayDate = getTodayDate();
+const dayName = jours[new Date(todayDate).getDay()];
+
+// ------------------- Initialisation -------------------
+if(!consignesStockees[todayDate]){
+  consignesStockees[todayDate] = consignesParJour[dayName] || [];
+  localStorage.setItem('consignes', JSON.stringify(consignesStockees));
+}
+
+// ------------------- Titre automatique -------------------
+document.getElementById('titre-consignes').textContent = "📌 Consignes du " + new Date(todayDate).toLocaleDateString('fr-FR');
+
+// ------------------- Affichage consignes -------------------
+function afficherConsignes() {
+  const container = document.getElementById('consignes-du-jour');
+  container.innerHTML = "";
+  let modifCount = 0;
+
+  consignesStockees[todayDate].forEach((c,index)=>{
+    const div = document.createElement('div');
+    div.className="consigne";
+
+    // Couleurs
+    if(c.done) div.classList.add("fait");
+    else if(c.prioritaire) div.classList.add("prioritaire");
+    else if(c.modifiee) { div.classList.add("modifiee"); modifCount++; }
+
+    // Checkbox à gauche
+    const check = document.createElement('input');
+    check.type="checkbox"; check.checked = c.done || false; check.style.marginRight="10px";
+    check.onchange = () => {
+      if(check.checked){
+        c.done = true; c.modifiee=false; archiverConsigne(c);
+        consignesStockees[todayDate].splice(index,1);
+      } else { c.done=false; }
+      sauvegarder();
+    };
+    div.appendChild(check);
+
+    // Texte consigne
+    const textSpan = document.createElement('span');
+    textSpan.textContent=c.text;
+    div.appendChild(textSpan);
+
+    // Badge modifiée
+    if(c.modifiee && !c.done){
+      const badge = document.createElement('span');
+      badge.className="badge"; badge.textContent="🔔 Modifiée";
+      div.appendChild(badge);
     }
 
-    // Afficher les consignes
-    function afficherConsignes() {
-      const div = document.getElementById("consignes");
-      div.innerHTML = "";
-      consignes.forEach((c, i) => {
-        const consDiv = document.createElement("div");
-        consDiv.className = "consigne";
-        if (c.prioritaire) consDiv.classList.add("prioritaire");
-        if (c.fait) consDiv.classList.add("fait");
-        if (c.modifie) consDiv.classList.add("modifie");
+    // Commentaire
+    const comment = document.createElement('input');
+    comment.type="text"; comment.placeholder="Commentaire si non fait"; comment.value=c.commentaire||"";
+    comment.style.marginLeft="10px";
+    comment.onchange = ()=> { c.commentaire=comment.value; sauvegarder(); }
+    div.appendChild(comment);
 
-        const check = document.createElement("input");
-        check.type = "checkbox";
-        check.checked = c.fait;
-        check.onchange = () => marquerFait(i);
+    // Boutons chef
+    if(role==="chef"){
+      const editBtn = document.createElement('button');
+      editBtn.textContent="✏️ Modifier"; editBtn.className="btn";
+      editBtn.onclick=()=>modifierConsigne(index);
+      div.appendChild(editBtn);
 
-        const span = document.createElement("span");
-        span.innerText = c.texte;
+      const toggleBtn = document.createElement('button');
+      toggleBtn.textContent = c.prioritaire ? "⚪ Retirer priorité" : "🔴 Mettre prioritaire";
+      toggleBtn.className="btn";
+      toggleBtn.onclick=()=>{
+        c.prioritaire=!c.prioritaire; c.modifiee=true; sauvegarder();
+      };
+      div.appendChild(toggleBtn);
 
-        consDiv.appendChild(check);
-        consDiv.appendChild(span);
-
-        if (chefMode) {
-          const btnP = document.createElement("button");
-          btnP.innerText = "🔴 Prioritaire";
-          btnP.onclick = () => basculerPrioritaire(i);
-          consDiv.appendChild(btnP);
-
-          const btnM = document.createElement("button");
-          btnM.innerText = "✏️ Modifier";
-          btnM.onclick = () => modifierConsigne(i);
-          consDiv.appendChild(btnM);
-
-          const btnS = document.createElement("button");
-          btnS.innerText = "🗑️ Supprimer";
-          btnS.onclick = () => supprimerConsigne(i);
-          consDiv.appendChild(btnS);
+      const delBtn = document.createElement('button');
+      delBtn.textContent="🗑️ Supprimer"; delBtn.className="btn";
+      delBtn.onclick=()=>{
+        if(confirm("Supprimer cette consigne ?")){
+          consignesStockees[todayDate].splice(index,1); sauvegarder();
         }
-
-        div.appendChild(consDiv);
-      });
-      sauvegarder();
+      };
+      div.appendChild(delBtn);
     }
 
-    // Ajouter une consigne
-    function ajouterConsigne() {
-      const texte = prompt("Nouvelle consigne :");
-      if (texte) {
-        consignes.push({ texte, fait: false, prioritaire: false, modifie: false });
-        afficherConsignes();
+    container.appendChild(div);
+  });
+
+  // Notification
+  const notif = document.getElementById('notification');
+  if(modifCount>0){ notif.style.display="block"; notif.textContent=`🔔 ${modifCount} consigne(s) modifiée(s) aujourd'hui !`; }
+  else notif.style.display="none";
+}
+
+// ------------------- Archiver consigne -------------------
+function archiverConsigne(consigne){
+  if(!consignesStockees['archives']) consignesStockees['archives']={};
+  if(!consignesStockees['archives'][todayDate]) consignesStockees['archives'][todayDate]=[];
+  consignesStockees['archives'][todayDate].push({...consigne});
+}
+
+// ------------------- Affichage archives -------------------
+function afficherArchives(){
+  const listeArchives=document.getElementById('liste-archives');
+  listeArchives.innerHTML="";
+  if(!consignesStockees['archives']) return;
+
+  Object.keys(consignesStockees['archives']).sort().forEach(date=>{
+    const dateDiv=document.createElement('div');
+    dateDiv.className = "archive-date";
+    dateDiv.textContent="📅 "+new Date(date).toLocaleDateString('fr-FR');
+    listeArchives.appendChild(dateDiv);
+
+    consignesStockees['archives'][date].forEach((c,index)=>{
+      const cDiv=document.createElement('div');
+      cDiv.className = "archive-consigne";
+
+      const textSpan=document.createElement('span');
+      textSpan.textContent="🔹 "+c.text + (c.commentaire ? " 💬 "+c.commentaire : "") + " ✅";
+      cDiv.appendChild(textSpan);
+
+      // Bouton supprimer si chef (retour automatique dans consignes)
+      if(role==="chef"){
+        const delBtn=document.createElement('button');
+        delBtn.textContent="🗑️ Supprimer";
+        delBtn.onclick=()=>{
+          // Supprimer de l'archive
+          const consigneSupprimee = consignesStockees['archives'][date].splice(index,1)[0];
+
+          // Revenir dans les consignes du jour
+          if(!consignesStockees[todayDate]) consignesStockees[todayDate]=[];
+          consignesStockees[todayDate].push({
+            text: consigneSupprimee.text,
+            prioritaire: consigneSupprimee.prioritaire,
+            modifiee: true
+          });
+
+          // Supprimer la date d'archive si vide
+          if(consignesStockees['archives'][date].length===0){
+            delete consignesStockees['archives'][date];
+          }
+
+          sauvegarder();
+        };
+        cDiv.appendChild(delBtn);
       }
-    }
 
-    // Modifier une consigne
-    function modifierConsigne(i) {
-      const nvTexte = prompt("Modifier la consigne :", consignes[i].texte);
-      if (nvTexte && nvTexte !== consignes[i].texte) {
-        consignes[i].texte = nvTexte;
-        consignes[i].modifie = true;
-        afficherConsignes();
-      }
-    }
+      listeArchives.appendChild(cDiv);
+    });
+  });
+}
 
-    // Supprimer une consigne
-    function supprimerConsigne(i) {
-      consignes.splice(i, 1);
-      afficherConsignes();
-    }
+// ------------------- Ajouter consigne -------------------
+document.getElementById('add-btn').onclick = () => {
+  const text=document.getElementById('new-consigne').value.trim();
+  const prioritaire=document.getElementById('new-prioritaire').checked;
+  if(text!==""){
+    consignesStockees[todayDate].push({text, prioritaire});
+    sauvegarder();
+    document.getElementById('new-consigne').value="";
+    document.getElementById('new-prioritaire').checked=false;
+  }
+};
 
-    // Bascule prioritaire
-    function basculerPrioritaire(i) {
-      consignes[i].prioritaire = !consignes[i].prioritaire;
-      afficherConsignes();
-    }
+// ------------------- Modifier consigne -------------------
+function modifierConsigne(index){
+  const nouvelleConsigne=prompt("Modifier la consigne :", consignesStockees[todayDate][index].text);
+  if(nouvelleConsigne!==null){
+    consignesStockees[todayDate][index].text=nouvelleConsigne;
+    consignesStockees[todayDate][index].modifiee=true;
+    sauvegarder();
+  }
+}
 
-    // Marquer fait -> va dans archives
-    function marquerFait(i) {
-      consignes[i].fait = true;
-      const date = new Date().toLocaleDateString("fr-FR");
-      if (!archives[date]) archives[date] = [];
-      archives[date].push(consignes[i]);
-      consignes.splice(i, 1);
-      afficherConsignes();
-      afficherArchives();
-    }
+// ------------------- Sauvegarde -------------------
+function sauvegarder(){
+  localStorage.setItem('consignes', JSON.stringify(consignesStockees));
+  afficherConsignes();
+  afficherArchives();
+}
 
-    // Afficher les archives
-    function afficherArchives() {
-      const div = document.getElementById("archives");
-      div.innerHTML = "";
-      for (const date in archives) {
-        const titre = document.createElement("div");
-        titre.className = "date-archive";
-        titre.innerText = date;
-        div.appendChild(titre);
+// ------------------- Gestion des rôles -------------------
+document.getElementById('toggle-role').onclick = ()=>{
+  const errorMsg=document.getElementById('error-msg'); errorMsg.textContent="";
+  if(role==="intervenant"){
+    const pwd=prompt("Mot de passe Chef :");
+    if(pwd===chefPassword){
+      role="chef";
+      document.getElementById('role-label').textContent="Chef";
+      document.getElementById('toggle-role').textContent="Passer en mode Intervenant";
+      document.getElementById('add-form').style.display="block";
+    } else { errorMsg.textContent="❌ Mot de passe incorrect"; }
+  } else {
+    role="intervenant";
+    document.getElementById('role-label').textContent="Intervenant";
+    document.getElementById('toggle-role').textContent="Passer en mode Chef";
+    document.getElementById('add-form').style.display="none";
+  }
+  afficherConsignes();
+  afficherArchives();
+};
 
-        archives[date].forEach(c => {
-          const p = document.createElement("div");
-          p.innerText = c.texte;
-          div.appendChild(p);
-        });
-      }
-      sauvegarder();
-    }
-
-    // Sauvegarder dans localStorage
-    function sauvegarder() {
-      localStorage.setItem("consignes", JSON.stringify(consignes));
-      localStorage.setItem("archives", JSON.stringify(archives));
-    }
-
-    // Mode Chef
-    function toggleChef() {
-      chefMode = !chefMode;
-      afficherConsignes();
-    }
-
-    // Mise à jour du titre
-    majTitre();
-
-    // Affichage initial
-    afficherConsignes();
-    afficherArchives();
-
-    // Rafraîchissement automatique toutes les 30 sec
-    setInterval(() => {
-      afficherConsignes();
-      afficherArchives();
-    }, 30000);
-  </script>
+// ------------------- Initialisation -------------------
+afficherConsignes();
+afficherArchives();
+</script>
 </body>
 </html>
