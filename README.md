@@ -1,54 +1,177 @@
-# Diagramme de l'application
-mon-appli/
-├── index.html       # Prototype HTML/CSS/JS
-├── README.md        # Documentation et diagramme
-└── docs/            # Dossier optionnel pour images ou diagrammes
-    └── diagramme.png
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Consignes du jour</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    h1 { color: #333; }
+    .consigne { margin: 8px 0; padding: 8px; border: 1px solid #ccc; border-radius: 5px; }
+    .consigne.prioritaire { background-color: #ffcccc; } /* Rouge */
+    .consigne.fait { background-color: #ccffcc; } /* Vert */
+    .consigne.modifie { background-color: #ffffcc; } /* Jaune */
+    .archives { margin-top: 30px; border-top: 2px solid #333; padding-top: 15px; }
+    .date-archive { font-weight: bold; margin-top: 15px; }
+    button { margin: 5px; padding: 5px 10px; }
+  </style>
+</head>
+<body>
+  <h1 id="titre-consignes"></h1>
 
-# 📌 Application de Consignes Interactives
+  <div id="consignes"></div>
 
-Cette application permet aux **chefs** de diffuser des consignes aux **intervenants**, avec gestion des priorités, notifications, surlignage des modifications, et un historique automatique après chaque journée.
+  <div>
+    <button onclick="ajouterConsigne()">➕ Ajouter une consigne</button>
+    <button onclick="toggleChef()">👨‍💼 Mode Chef</button>
+  </div>
 
----
+  <div class="archives">
+    <h2>Archives</h2>
+    <div id="archives"></div>
+  </div>
 
-## 👥 Rôles des utilisateurs
+  <script>
+    let consignes = JSON.parse(localStorage.getItem("consignes")) || [];
+    let archives = JSON.parse(localStorage.getItem("archives")) || {};
+    let chefMode = false;
 
-- **Chefs** :
-  - Créent et modifient les consignes
-  - Marquent certaines consignes comme **prioritaires**
-  - Modifient l’encadré des **informations importantes**
-  - Consultent l’historique
+    // Titre avec la date automatique
+    function majTitre() {
+      const date = new Date();
+      const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
+      document.getElementById("titre-consignes").innerText = 
+        "Consignes du " + date.toLocaleDateString("fr-FR", options);
+    }
 
-- **Intervenants** :
-  - Lisent les consignes du jour
-  - Peuvent cocher « ✅ fait » sur une consigne
-  - Peuvent ajouter un commentaire si la consigne n’est pas réalisée
-  - Ont accès à l’historique en **lecture seule**
+    // Afficher les consignes
+    function afficherConsignes() {
+      const div = document.getElementById("consignes");
+      div.innerHTML = "";
+      consignes.forEach((c, i) => {
+        const consDiv = document.createElement("div");
+        consDiv.className = "consigne";
+        if (c.prioritaire) consDiv.classList.add("prioritaire");
+        if (c.fait) consDiv.classList.add("fait");
+        if (c.modifie) consDiv.classList.add("modifie");
 
----
+        const check = document.createElement("input");
+        check.type = "checkbox";
+        check.checked = c.fait;
+        check.onchange = () => marquerFait(i);
 
-## ⚙️ Fonctionnalités principales
+        const span = document.createElement("span");
+        span.innerText = c.texte;
 
-- 📢 **Diffusion avec notification** dès qu’une consigne est créée ou modifiée  
-- 🔴 **Consignes prioritaires** affichées en rouge  
-- 🟨 **Surlignage des modifications** (même une lettre changée)  
-- ✅ **Checklist** pour marquer une consigne comme faite  
-- 💬 **Commentaires** si non fait    
-- 📚 **Archivage automatique** : les consignes passées sont déplacées dans un bandeau « Historique », **en lecture seule** pour garder une trace
+        consDiv.appendChild(check);
+        consDiv.appendChild(span);
 
----
+        if (chefMode) {
+          const btnP = document.createElement("button");
+          btnP.innerText = "🔴 Prioritaire";
+          btnP.onclick = () => basculerPrioritaire(i);
+          consDiv.appendChild(btnP);
 
-## 📊 Diagramme général
+          const btnM = document.createElement("button");
+          btnM.innerText = "✏️ Modifier";
+          btnM.onclick = () => modifierConsigne(i);
+          consDiv.appendChild(btnM);
 
-```mermaid
-flowchart TD
-  subgraph Utilisateurs
-    Chef
-    Intervenant
-  end
+          const btnS = document.createElement("button");
+          btnS.innerText = "🗑️ Supprimer";
+          btnS.onclick = () => supprimerConsigne(i);
+          consDiv.appendChild(btnS);
+        }
 
-  Chef -->|Crée/Modifie| Base[(Base de données)]
-  Intervenant -->|Lit/Exécute| Base
+        div.appendChild(consDiv);
+      });
+      sauvegarder();
+    }
 
-  Base -->|🔔 Notifications temps réel| Intervenant
-  Base -->|🔔 Notifications temps réel| Ch
+    // Ajouter une consigne
+    function ajouterConsigne() {
+      const texte = prompt("Nouvelle consigne :");
+      if (texte) {
+        consignes.push({ texte, fait: false, prioritaire: false, modifie: false });
+        afficherConsignes();
+      }
+    }
+
+    // Modifier une consigne
+    function modifierConsigne(i) {
+      const nvTexte = prompt("Modifier la consigne :", consignes[i].texte);
+      if (nvTexte && nvTexte !== consignes[i].texte) {
+        consignes[i].texte = nvTexte;
+        consignes[i].modifie = true;
+        afficherConsignes();
+      }
+    }
+
+    // Supprimer une consigne
+    function supprimerConsigne(i) {
+      consignes.splice(i, 1);
+      afficherConsignes();
+    }
+
+    // Bascule prioritaire
+    function basculerPrioritaire(i) {
+      consignes[i].prioritaire = !consignes[i].prioritaire;
+      afficherConsignes();
+    }
+
+    // Marquer fait -> va dans archives
+    function marquerFait(i) {
+      consignes[i].fait = true;
+      const date = new Date().toLocaleDateString("fr-FR");
+      if (!archives[date]) archives[date] = [];
+      archives[date].push(consignes[i]);
+      consignes.splice(i, 1);
+      afficherConsignes();
+      afficherArchives();
+    }
+
+    // Afficher les archives
+    function afficherArchives() {
+      const div = document.getElementById("archives");
+      div.innerHTML = "";
+      for (const date in archives) {
+        const titre = document.createElement("div");
+        titre.className = "date-archive";
+        titre.innerText = date;
+        div.appendChild(titre);
+
+        archives[date].forEach(c => {
+          const p = document.createElement("div");
+          p.innerText = c.texte;
+          div.appendChild(p);
+        });
+      }
+      sauvegarder();
+    }
+
+    // Sauvegarder dans localStorage
+    function sauvegarder() {
+      localStorage.setItem("consignes", JSON.stringify(consignes));
+      localStorage.setItem("archives", JSON.stringify(archives));
+    }
+
+    // Mode Chef
+    function toggleChef() {
+      chefMode = !chefMode;
+      afficherConsignes();
+    }
+
+    // Mise à jour du titre
+    majTitre();
+
+    // Affichage initial
+    afficherConsignes();
+    afficherArchives();
+
+    // Rafraîchissement automatique toutes les 30 sec
+    setInterval(() => {
+      afficherConsignes();
+      afficherArchives();
+    }, 30000);
+  </script>
+</body>
+</html>
